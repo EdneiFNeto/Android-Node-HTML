@@ -2,16 +2,16 @@ package com.webview
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.net.http.SslError
 import android.os.Bundle
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
@@ -20,14 +20,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+
 
 class WebViewActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,7 +49,9 @@ class WebViewActivity : ComponentActivity() {
 fun WebViewComponent() {
     val webViewState = rememberWebViewState()
 
-    if (webViewState.loader) {
+    /*
+    if (webViewState.loader && !webViewState.isInitializedDialog) {
+        webViewState.isInitializedDialog = true
         Dialog(
             onDismissRequest = { },
             properties = DialogProperties(
@@ -81,6 +85,8 @@ fun WebViewComponent() {
             }
         )
     }
+
+     */
 
     val url = "https://zoop.com.br"
     val chromeClient = webChromeClient(webViewState)
@@ -127,23 +133,56 @@ fun WebViewComponent() {
                 modifier = Modifier.height(40.dp)
             )
         }, content = {
-            AndroidView(factory = {
-                WebView(it).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-
-                    webChromeClient = chromeClient
-                    webViewClient = webViewClient(webViewState)
-
-                    loadUrl(url)
-                    webViewState.webView = this
+            Column(modifier = Modifier.fillMaxSize()) {
+                if(webViewState.isShowIndicator) {
+                    ProgressBarComponent(webViewState.percent)
                 }
-            }, update = {
-                webViewState.webView = it
-            })
+
+                AndroidView(factory = {
+                    WebView(it).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+
+                        webChromeClient = chromeClient
+                        webViewClient = webViewClient(webViewState)
+
+                        loadUrl(url)
+                        webViewState.webView = this
+                    }
+                }, update = {
+                    webViewState.webView = it
+                })
+            }
         })
+}
+
+@Composable
+fun ProgressBarComponent(progress: Int) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier = Modifier
+                .height(15.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Red)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(500.dp * progress / 100)
+            )
+
+            Text(
+                text = "$progress %",
+                modifier = Modifier.align(Alignment.Center),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+        }
+    }
 }
 
 @Composable
@@ -163,6 +202,7 @@ private fun webChromeClient(webViewState: WebViewState) = remember {
 
         override fun onProgressChanged(view: WebView?, newProgress: Int) {
             super.onProgressChanged(view, newProgress)
+            Log.d(TAG, "newProgress $newProgress%")
             webViewState.percent = newProgress
         }
 
@@ -179,6 +219,7 @@ private fun webViewClient(webViewState: WebViewState): WebViewClient {
             Log.d("onPageStarted", "On Page started")
             webViewState.loader = true
             webViewState.backEnabled = true
+            webViewState.isShowIndicator = true
         }
 
         override fun onPageFinished(view: WebView?, url: String?) {
@@ -186,6 +227,7 @@ private fun webViewClient(webViewState: WebViewState): WebViewClient {
             Log.d("onPageFinished", "On Page Finished")
             webViewState.loader = false
             webViewState.forwardEnabled = true
+            webViewState.isShowIndicator = false
         }
     }
 }
@@ -194,16 +236,20 @@ class WebViewState(
     title: String,
     icon: Bitmap?,
     percent: Int,
+    isShowIndicator: Boolean,
     backEnabled: Boolean,
     forwardEnabled: Boolean,
+    isInitializedDialog: Boolean,
     loader: Boolean,
     webView: WebView?,
 ) {
     var title by mutableStateOf(title)
     var icon by mutableStateOf(icon)
     var percent by mutableStateOf(percent)
+    var isShowIndicator by mutableStateOf(isShowIndicator)
     var backEnabled by mutableStateOf(backEnabled)
     var forwardEnabled by mutableStateOf(forwardEnabled)
+    var isInitializedDialog by mutableStateOf(isInitializedDialog)
     var loader by mutableStateOf(loader)
     var webView by mutableStateOf(webView)
 }
@@ -213,8 +259,10 @@ fun rememberWebViewState(
     title: String? = null,
     percent: Int = 0,
     icon: Bitmap? = null,
+    isShowIndicator: Boolean = false,
     backEnabled: Boolean = false,
     forwardEnabled: Boolean = false,
+    isInitializedDialog: Boolean = false,
     loader: Boolean = false,
     webView: WebView? = null
 ) = remember {
@@ -222,8 +270,10 @@ fun rememberWebViewState(
         title = title ?: "",
         icon = icon,
         percent = percent,
+        isShowIndicator = backEnabled,
         backEnabled = backEnabled,
         forwardEnabled = forwardEnabled,
+        isInitializedDialog = isInitializedDialog,
         loader = loader,
         webView = webView,
     )
